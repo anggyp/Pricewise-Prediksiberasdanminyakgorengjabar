@@ -1,11 +1,10 @@
 
-from flask import Flask,render_template,request
+import streamlit as st
 import pandas as pd, numpy as np
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_absolute_error,mean_squared_error,r2_score
 import math
 
-app=Flask(__name__)
 
 def get_series(file_name, sheet_name, row_name):
 
