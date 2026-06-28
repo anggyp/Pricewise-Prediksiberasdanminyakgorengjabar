@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -27,6 +26,18 @@ def get_series(file_name, sheet_name, row_name):
             vals.append(float(nilai.replace(",", "")))
 
     return vals
+
+
+# =========================
+# GET WILAYAH OTOMATIS
+# =========================
+def get_wilayah_list():
+    df = pd.read_excel("dataset/beras.xlsx")
+
+    # kolom ke-2 biasanya berisi nama wilayah
+    wilayah_list = df.iloc[:, 1].dropna().astype(str).str.strip().unique().tolist()
+
+    return wilayah_list
 
 
 # =========================
@@ -65,11 +76,12 @@ def build(wilayah):
 # =========================
 st.set_page_config(page_title="PriceWise Jabar", layout="centered")
 
-st.title("📊 Prediksi Harga Beras & Minyak Goreng Jabar")
-st.write("Aplikasi prediksi menggunakan Linear Regression")
+st.title("📊 PriceWise - Prediksi Harga Beras & Minyak Goreng Jabar")
+st.write("Model Machine Learning Linear Regression")
 
-# input user
-wilayah = st.selectbox("Pilih Wilayah", ["Kota Bandung"])
+# ambil wilayah otomatis dari Excel
+wilayah_list = get_wilayah_list()
+wilayah = st.selectbox("Pilih Wilayah", wilayah_list)
 
 tahun = st.number_input("Tahun", min_value=2024, max_value=2035, value=2026)
 bulan = st.number_input("Bulan", min_value=1, max_value=12, value=1)
@@ -82,11 +94,11 @@ if st.button("🔮 Prediksi"):
 
     periode = (tahun - 2024) * 12 + bulan
 
-    pred_b = round(model_beras.predict([[periode]])[0], 2)
-    pred_m = round(model_minyak.predict([[periode]])[0], 2)
+    pred_beras = round(model_beras.predict([[periode]])[0], 2)
+    pred_minyak = round(model_minyak.predict([[periode]])[0], 2)
 
-    st.success(f"🍚 Prediksi Harga Beras: {pred_b}")
-    st.success(f"🛢️ Prediksi Harga Minyak Goreng: {pred_m}")
+    st.success(f"🍚 Prediksi Harga Beras: {pred_beras}")
+    st.success(f"🛢️ Prediksi Harga Minyak Goreng: {pred_minyak}")
 
-    st.write("### 📊 Metrics Model")
+    st.write("### 📊 Evaluation Metrics")
     st.json(metrics)
