@@ -7,47 +7,43 @@ import math
 
 
 # =========================
-# AMBIL DAFTAR SHEET (WILAYAH)
+# LIST KOTA (DARI SHEET)
 # =========================
-def get_wilayah_list():
+def get_city_list():
     file = pd.ExcelFile("dataset/beras.xlsx")
     return file.sheet_names
 
 
 # =========================
-# AMBIL DATA DARI SHEET
+# AMBIL DATA PER KOMODITAS
 # =========================
-def get_series(file_name, sheet_name, row_name):
+def get_series(file_name, city, keyword):
 
-    df = pd.read_excel(file_name, sheet_name=sheet_name)
+    df = pd.read_excel(file_name, sheet_name=city)
 
-    row = df[df.iloc[:, 1].astype(str).str.strip() == row_name]
+    # filter baris sesuai komoditas (beras / minyak)
+    rows = df[df.iloc[:, 1].astype(str).str.contains(keyword, case=False, na=False)]
 
-    if row.empty:
+    if rows.empty:
         return []
 
-    row = row.iloc[0]
+    # ambil semua baris lalu rata-rata
+    data = rows.iloc[:, 2:]
 
-    vals = []
+    # ubah format "19,600" → 19600
+    data = data.replace("-", 0)
+    data = data.applymap(lambda x: float(str(x).replace(",", "")) if str(x) not in ["nan", ""] else 0)
 
-    for v in row.iloc[2:]:
-        nilai = str(v).strip()
-
-        if nilai in ["-", "", "nan", "NaN"]:
-            vals.append(0)
-        else:
-            vals.append(float(str(nilai).replace(",", "")))
-
-    return vals
+    return data.mean().tolist()
 
 
 # =========================
-# MODEL
+# BUILD MODEL
 # =========================
-def build(wilayah):
+def build(city):
 
-    beras = get_series("dataset/beras.xlsx", wilayah, "Beras")
-    minyak = get_series("dataset/minyak.xlsx", wilayah, "Minyak Goreng")
+    beras = get_series("dataset/beras.xlsx", city, "Beras")
+    minyak = get_series("dataset/minyak.xlsx", city, "Minyak")
 
     if len(beras) == 0 or len(minyak) == 0:
         return None, None, {}
@@ -82,28 +78,32 @@ st.set_page_config(page_title="PriceWise Jabar", layout="centered")
 
 st.title("📊 PriceWise - Prediksi Harga Beras & Minyak Goreng Jabar")
 
-# dropdown dari SHEET Excel
-wilayah_list = get_wilayah_list()
-wilayah = st.selectbox("Pilih Wilayah", wilayah_list)
+# kota dari sheet
+cities = get_city_list()
+city = st.selectbox("Pilih Kota", cities)
+
+# komoditas fix (biar simpel & stabil)
+komoditas = st.selectbox("Komoditas", ["Beras", "Minyak"])
 
 tahun = st.number_input("Tahun", 2024, 2035, 2026)
 bulan = st.number_input("Bulan", 1, 12, 1)
 
-model_beras, model_minyak, metrics = build(wilayah)
+model_beras, model_minyak, metrics = build(city)
 
 if model_beras is None:
-    st.error("Data tidak ditemukan di sheet Excel")
+    st.error("Data tidak ditemukan di dataset")
     st.stop()
 
 if st.button("🔮 Prediksi"):
 
     periode = (tahun - 2024) * 12 + bulan
 
-    pred_beras = round(model_beras.predict([[periode]])[0], 2)
-    pred_minyak = round(model_minyak.predict([[periode]])[0], 2)
+    if komoditas == "Beras":
+        pred = round(model_beras.predict([[periode]])[0], 2)
+        st.success(f"🍚 Prediksi Beras di {city}: {pred}")
+    else:
+        pred = round(model_minyak.predict([[periode]])[0], 2)
+        st.success(f"🛢️ Prediksi Minyak di {city}: {pred}")
 
-    st.success(f"🍚 Beras ({wilayah}): {pred_beras}")
-    st.success(f"🛢️ Minyak ({wilayah}): {pred_minyak}")
-
-    st.write("### 📊 Metrics")
+    st.write("### 📊 Metrics Model")
     st.json(metrics)
