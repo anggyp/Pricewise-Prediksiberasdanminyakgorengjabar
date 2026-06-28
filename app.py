@@ -5,112 +5,129 @@ from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 import math
 
-
 # =========================
-# LIST KOTA (DARI SHEET)
+# CONFIG
 # =========================
-def get_city_list():
-    file = pd.ExcelFile("dataset/beras.xlsx")
-    return file.sheet_names
+BERAS_FILE = "dataset/beras.xlsx"
+MINYAK_FILE = "dataset/minyak.xlsx"
 
 
 # =========================
-# AMBIL DATA PER KOMODITAS
+# AMBIL LIST KOTA (SHEET)
 # =========================
-def get_series(file_name, city, keyword):
+def get_cities():
+    return pd.ExcelFile(BERAS_FILE).sheet_names
 
-    df = pd.read_excel(file_name, sheet_name=city)
 
-    # filter baris sesuai komoditas
-    rows = df[df.iloc[:, 1].astype(str).str.contains(keyword, case=False, na=False)]
+# =========================
+# AMBIL LIST KOMODITAS
+# =========================
+def get_commodities(file, city):
+    df = pd.read_excel(file, sheet_name=city)
+    return df.iloc[:, 1].dropna().astype(str).unique().tolist()
 
-    if rows.empty:
+
+# =========================
+# AMBIL TIME SERIES DATA
+# =========================
+def get_series(file, city, commodity):
+    df = pd.read_excel(file, sheet_name=city)
+
+    row = df[df.iloc[:, 1].astype(str) == commodity]
+
+    if row.empty:
         return []
 
-    # ambil kolom harga (dari kolom ke-3 dst)
-    data = rows.iloc[:, 2:]
+    values = row.iloc[:, 2:].values.flatten()
 
-    # =========================
-    # FIX UTAMA (GANTI APPLYMAP)
-    # =========================
+    # cleaning
+    cleaned = []
+    for v in values:
+        v = str(v).replace(",", "").replace("-", "")
+        if v == "" or v.lower() == "nan":
+            continue
+        try:
+            cleaned.append(float(v))
+        except:
+            cleaned.append(0)
 
-    data = data.replace("-", np.nan)
-    data = data.replace(",", "", regex=True)
-
-    data = data.apply(pd.to_numeric, errors="coerce")
-
-    # isi missing value
-    data = data.fillna(0)
-
-    # rata-rata tiap kolom lalu jadi list
-    return data.mean().tolist()
+    return cleaned
 
 
 # =========================
 # BUILD MODEL
 # =========================
-def build(city):
+def build_model(series):
+    if len(series) < 2:
+        return None, None
 
-    beras = get_series("dataset/beras.xlsx", city, "Beras")
-    minyak = get_series("dataset/minyak.xlsx", city, "Minyak")
+    X = np.arange(1, len(series) + 1).reshape(-1, 1)
+    y = np.array(series)
 
-    if len(beras) == 0 or len(minyak) == 0:
-        return None, None, {}
+    model = LinearRegression()
+    model.fit(X, y)
 
-    X = np.arange(1, len(beras) + 1).reshape(-1, 1)
-
-    model_beras = LinearRegression().fit(X, beras)
-    model_minyak = LinearRegression().fit(X, minyak)
-
-    pred_beras = model_beras.predict(X)
-    pred_minyak = model_minyak.predict(X)
+    pred = model.predict(X)
 
     metrics = {
-        "mae_beras": round(mean_absolute_error(beras, pred_beras), 2),
-        "mse_beras": round(mean_squared_error(beras, pred_beras), 2),
-        "rmse_beras": round(math.sqrt(mean_squared_error(beras, pred_beras)), 2),
-        "r2_beras": round(r2_score(beras, pred_beras), 4),
-
-        "mae_minyak": round(mean_absolute_error(minyak, pred_minyak), 2),
-        "mse_minyak": round(mean_squared_error(minyak, pred_minyak), 2),
-        "rmse_minyak": round(math.sqrt(mean_squared_error(minyak, pred_minyak)), 2),
-        "r2_minyak": round(r2_score(minyak, pred_minyak), 4),
+        "mae": round(mean_absolute_error(y, pred), 2),
+        "mse": round(mean_squared_error(y, pred), 2),
+        "rmse": round(math.sqrt(mean_squared_error(y, pred)), 2),
+        "r2": round(r2_score(y, pred), 4),
     }
 
-    return model_beras, model_minyak, metrics
+    return model, metrics
 
 
 # =========================
-# STREAMLIT UI
+# UI
 # =========================
 st.set_page_config(page_title="PriceWise Jabar", layout="centered")
 
-st.title("📊 PriceWise - Prediksi Harga Beras & Minyak Goreng Jabar")
+st.title("📊 PriceWise - Prediksi Harga & Kualitas Pangan Jabar")
 
-cities = get_city_list()
+# pilih kota
+cities = get_cities()
 city = st.selectbox("Pilih Kota", cities)
 
-komoditas = st.selectbox("Komoditas", ["Beras", "Minyak"])
+# pilih jenis data
+dataset_type = st.selectbox("Pilih Komoditas", ["Beras", "Minyak"])
 
+file = BERAS_FILE if dataset_type == "Beras" else MINYAK_FILE
+
+# ambil kualitas dari dataset
+commodities = get_commodities(file, city)
+commodity = st.selectbox("Pilih Kualitas / Jenis", commodities)
+
+# input waktu
 tahun = st.number_input("Tahun", 2024, 2035, 2026)
 bulan = st.number_input("Bulan", 1, 12, 1)
 
-model_beras, model_minyak, metrics = build(city)
+# =========================
+# PROCESS DATA
+# =========================
+series = get_series(file, city, commodity)
 
-if model_beras is None:
-    st.error("Data tidak ditemukan di dataset")
+model, metrics = build_model(series)
+
+if model is None:
+    st.error("Data tidak cukup untuk membuat model")
     st.stop()
 
+# =========================
+# PREDICTION
+# =========================
 if st.button("🔮 Prediksi"):
 
     periode = (tahun - 2024) * 12 + bulan
+    pred = round(model.predict([[periode]])[0], 2)
 
-    if komoditas == "Beras":
-        pred = round(model_beras.predict([[periode]])[0], 2)
-        st.success(f"🍚 Prediksi Beras di {city}: {pred}")
-    else:
-        pred = round(model_minyak.predict([[periode]])[0], 2)
-        st.success(f"🛢️ Prediksi Minyak di {city}: {pred}")
+    st.success("📌 HASIL PREDIKSI")
+    st.write(f"🏷️ Komoditas : {commodity}")
+    st.write(f"📍 Kota : {city}")
+    st.write(f"💰 Prediksi Harga : Rp {pred:,.0f}")
 
-    st.write("### 📊 Metrics Model")
+    st.write("---")
+    st.write("📊 Model Quality")
+
     st.json(metrics)
