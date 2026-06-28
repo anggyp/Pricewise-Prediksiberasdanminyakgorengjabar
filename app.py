@@ -7,13 +7,17 @@ import math
 
 
 # =========================
-# LOAD DATA
+# LOAD DATA (PER WILAYAH)
 # =========================
-def get_series(file_name, row_name):
+def get_series(file_name, wilayah, row_name):
 
     df = pd.read_excel(file_name)
 
-    row = df[df.iloc[:, 1].astype(str).str.strip() == row_name]
+    # filter wilayah + komoditas
+    row = df[
+        (df.iloc[:, 0].astype(str).str.strip() == wilayah) &
+        (df.iloc[:, 1].astype(str).str.strip() == row_name)
+    ]
 
     if row.empty:
         return []
@@ -34,12 +38,20 @@ def get_series(file_name, row_name):
 
 
 # =========================
-# BUILD MODEL
+# GET LIST WILAYAH
 # =========================
-def build():
+def get_wilayah_list():
+    df = pd.read_excel("dataset/beras.xlsx")
+    return df.iloc[:, 0].dropna().astype(str).unique().tolist()
 
-    beras = get_series("dataset/beras.xlsx", "Beras")
-    minyak = get_series("dataset/minyak.xlsx", "Minyak Goreng")
+
+# =========================
+# MODEL
+# =========================
+def build(wilayah):
+
+    beras = get_series("dataset/beras.xlsx", wilayah, "Beras")
+    minyak = get_series("dataset/minyak.xlsx", wilayah, "Minyak Goreng")
 
     if len(beras) == 0 or len(minyak) == 0:
         return None, None, {}
@@ -49,44 +61,40 @@ def build():
     model_beras = LinearRegression().fit(X, beras)
     model_minyak = LinearRegression().fit(X, minyak)
 
-    pred_beras_train = model_beras.predict(X)
-    pred_minyak_train = model_minyak.predict(X)
+    pred_beras = model_beras.predict(X)
+    pred_minyak = model_minyak.predict(X)
 
     metrics = {
-        "mae_beras": round(mean_absolute_error(beras, pred_beras_train), 2),
-        "mse_beras": round(mean_squared_error(beras, pred_beras_train), 2),
-        "rmse_beras": round(math.sqrt(mean_squared_error(beras, pred_beras_train)), 2),
-        "r2_beras": round(r2_score(beras, pred_beras_train), 4),
+        "mae_beras": round(mean_absolute_error(beras, pred_beras), 2),
+        "mse_beras": round(mean_squared_error(beras, pred_beras), 2),
+        "rmse_beras": round(math.sqrt(mean_squared_error(beras, pred_beras)), 2),
+        "r2_beras": round(r2_score(beras, pred_beras), 4),
 
-        "mae_minyak": round(mean_absolute_error(minyak, pred_minyak_train), 2),
-        "mse_minyak": round(mean_squared_error(minyak, pred_minyak_train), 2),
-        "rmse_minyak": round(math.sqrt(mean_squared_error(minyak, pred_minyak_train)), 2),
-        "r2_minyak": round(r2_score(minyak, pred_minyak_train), 4),
+        "mae_minyak": round(mean_absolute_error(minyak, pred_minyak), 2),
+        "mse_minyak": round(mean_squared_error(minyak, pred_minyak), 2),
+        "rmse_minyak": round(math.sqrt(mean_squared_error(minyak, pred_minyak)), 2),
+        "r2_minyak": round(r2_score(minyak, pred_minyak), 4),
     }
 
     return model_beras, model_minyak, metrics
 
 
 # =========================
-# UI STREAMLIT
+# STREAMLIT UI
 # =========================
-st.set_page_config(page_title="PriceWise Jabar", layout="centered")
+st.title("📊 PriceWise - Multi Wilayah Jabar")
 
-st.title("📊 PriceWise - Prediksi Harga Beras & Minyak Goreng Jabar")
-st.write("Model Linear Regression")
+wilayah_list = get_wilayah_list()
+wilayah = st.selectbox("Pilih Wilayah", wilayah_list)
 
-st.info("Wilayah: Jawa Barat (default dari dataset)")
+tahun = st.number_input("Tahun", 2024, 2035, 2026)
+bulan = st.number_input("Bulan", 1, 12, 1)
 
-# build model
-model_beras, model_minyak, metrics = build()
+model_beras, model_minyak, metrics = build(wilayah)
 
 if model_beras is None:
-    st.error("Data tidak ditemukan di Excel. Cek dataset kamu.")
+    st.error("Data wilayah tidak ditemukan di dataset")
     st.stop()
-
-# input user
-tahun = st.number_input("Tahun", min_value=2024, max_value=2035, value=2026)
-bulan = st.number_input("Bulan", min_value=1, max_value=12, value=1)
 
 if st.button("🔮 Prediksi"):
 
@@ -95,8 +103,7 @@ if st.button("🔮 Prediksi"):
     pred_beras = round(model_beras.predict([[periode]])[0], 2)
     pred_minyak = round(model_minyak.predict([[periode]])[0], 2)
 
-    st.success(f"🍚 Prediksi Harga Beras: {pred_beras}")
-    st.success(f"🛢️ Prediksi Harga Minyak Goreng: {pred_minyak}")
+    st.success(f"🍚 Beras ({wilayah}): {pred_beras}")
+    st.success(f"🛢️ Minyak ({wilayah}): {pred_minyak}")
 
-    st.write("### 📊 Evaluation Metrics")
     st.json(metrics)
