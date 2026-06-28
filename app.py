@@ -7,17 +7,21 @@ import math
 
 
 # =========================
-# LOAD DATA
+# AMBIL DAFTAR SHEET (WILAYAH)
 # =========================
-def get_series(file_name, wilayah, row_name):
+def get_wilayah_list():
+    file = pd.ExcelFile("dataset/beras.xlsx")
+    return file.sheet_names
 
-    df = pd.read_excel(file_name)
 
-    # filter berdasarkan wilayah + komoditas
-    row = df[
-        (df.iloc[:, 0].astype(str).str.strip() == wilayah) &
-        (df.iloc[:, 1].astype(str).str.strip() == row_name)
-    ]
+# =========================
+# AMBIL DATA DARI SHEET
+# =========================
+def get_series(file_name, sheet_name, row_name):
+
+    df = pd.read_excel(file_name, sheet_name=sheet_name)
+
+    row = df[df.iloc[:, 1].astype(str).str.strip() == row_name]
 
     if row.empty:
         return []
@@ -38,21 +42,7 @@ def get_series(file_name, wilayah, row_name):
 
 
 # =========================
-# AMBIL WILAYAH (FIX ANGKA)
-# =========================
-def get_wilayah_list():
-    df = pd.read_excel("dataset/beras.xlsx")
-
-    wilayah = df.iloc[:, 0].astype(str)
-
-    # ambil hanya yang ada huruf (nama kota)
-    wilayah = wilayah[wilayah.str.contains("[A-Za-z]", regex=True)]
-
-    return wilayah.dropna().unique().tolist()
-
-
-# =========================
-# BUILD MODEL
+# MODEL
 # =========================
 def build(wilayah):
 
@@ -91,19 +81,18 @@ def build(wilayah):
 st.set_page_config(page_title="PriceWise Jabar", layout="centered")
 
 st.title("📊 PriceWise - Prediksi Harga Beras & Minyak Goreng Jabar")
-st.write("Model Linear Regression")
 
-# dropdown wilayah (SUDAH FIX ANGKA)
+# dropdown dari SHEET Excel
 wilayah_list = get_wilayah_list()
 wilayah = st.selectbox("Pilih Wilayah", wilayah_list)
 
-tahun = st.number_input("Tahun", min_value=2024, max_value=2035, value=2026)
-bulan = st.number_input("Bulan", min_value=1, max_value=12, value=1)
+tahun = st.number_input("Tahun", 2024, 2035, 2026)
+bulan = st.number_input("Bulan", 1, 12, 1)
 
 model_beras, model_minyak, metrics = build(wilayah)
 
 if model_beras is None:
-    st.error("Data tidak ditemukan untuk wilayah ini di dataset.")
+    st.error("Data tidak ditemukan di sheet Excel")
     st.stop()
 
 if st.button("🔮 Prediksi"):
@@ -116,5 +105,5 @@ if st.button("🔮 Prediksi"):
     st.success(f"🍚 Beras ({wilayah}): {pred_beras}")
     st.success(f"🛢️ Minyak ({wilayah}): {pred_minyak}")
 
-    st.write("### 📊 Evaluation Metrics")
+    st.write("### 📊 Metrics")
     st.json(metrics)
