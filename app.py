@@ -7,13 +7,12 @@ import math
 
 
 # =========================
-# LOAD DATA (FIXED)
+# LOAD DATA
 # =========================
 def get_series(file_name, row_name):
 
     df = pd.read_excel(file_name)
 
-    # cari baris sesuai nama komoditas (Beras / Minyak Goreng)
     row = df[df.iloc[:, 1].astype(str).str.strip() == row_name]
 
     if row.empty:
@@ -26,29 +25,18 @@ def get_series(file_name, row_name):
     for v in row.iloc[2:]:
         nilai = str(v).strip()
 
-        if nilai == "-" or nilai == "" or nilai.lower() == "nan":
+        if nilai in ["-", "", "nan", "NaN"]:
             vals.append(0)
         else:
-            vals.append(float(nilai.replace(",", "")))
+            vals.append(float(str(nilai).replace(",", "")))
 
     return vals
 
 
 # =========================
-# GET WILAYAH OTOMATIS
-# =========================
-def get_wilayah_list():
-    df = pd.read_excel("dataset/beras.xlsx")
-
-    wilayah_list = df.iloc[:, 1].dropna().astype(str).str.strip().unique().tolist()
-
-    return wilayah_list
-
-
-# =========================
 # BUILD MODEL
 # =========================
-def build(wilayah):
+def build():
 
     beras = get_series("dataset/beras.xlsx", "Beras")
     minyak = get_series("dataset/minyak.xlsx", "Minyak Goreng")
@@ -80,26 +68,25 @@ def build(wilayah):
 
 
 # =========================
-# STREAMLIT UI
+# UI STREAMLIT
 # =========================
 st.set_page_config(page_title="PriceWise Jabar", layout="centered")
 
 st.title("📊 PriceWise - Prediksi Harga Beras & Minyak Goreng Jabar")
+st.write("Model Linear Regression")
 
-st.write("Model Machine Learning Linear Regression")
+st.info("Wilayah: Jawa Barat (default dari dataset)")
 
-# dropdown wilayah (AUTO dari Excel)
-wilayah_list = get_wilayah_list()
-wilayah = st.selectbox("Pilih Wilayah", wilayah_list)
-
-tahun = st.number_input("Tahun", min_value=2024, max_value=2035, value=2026)
-bulan = st.number_input("Bulan", min_value=1, max_value=12, value=1)
-
-model_beras, model_minyak, metrics = build(wilayah)
+# build model
+model_beras, model_minyak, metrics = build()
 
 if model_beras is None:
     st.error("Data tidak ditemukan di Excel. Cek dataset kamu.")
     st.stop()
+
+# input user
+tahun = st.number_input("Tahun", min_value=2024, max_value=2035, value=2026)
+bulan = st.number_input("Bulan", min_value=1, max_value=12, value=1)
 
 if st.button("🔮 Prediksi"):
 
