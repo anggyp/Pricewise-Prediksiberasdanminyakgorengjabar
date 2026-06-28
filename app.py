@@ -1,133 +1,92 @@
 
 import streamlit as st
-import pandas as pd, numpy as np
+import pandas as pd
+import numpy as np
 from sklearn.linear_model import LinearRegression
-from sklearn.metrics import mean_absolute_error,mean_squared_error,r2_score
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 import math
 
 
+# =========================
+# LOAD DATA
+# =========================
 def get_series(file_name, sheet_name, row_name):
 
-    df = pd.read_excel(
-        file_name,
-        sheet_name=sheet_name
-    )
+    df = pd.read_excel(file_name, sheet_name=sheet_name)
 
-    row = df[
-        df.iloc[:,1].astype(str).str.strip() == row_name
-    ].iloc[0]
+    row = df[df.iloc[:, 1].astype(str).str.strip() == row_name].iloc[0]
 
     vals = []
 
     for v in row.iloc[2:]:
-
         nilai = str(v).strip()
 
         if nilai == "-" or nilai == "" or nilai.lower() == "nan":
             vals.append(0)
-
         else:
-            vals.append(
-                float(nilai.replace(",", ""))
-            )
+            vals.append(float(nilai.replace(",", "")))
+
     return vals
 
 
+# =========================
+# BUILD MODEL
+# =========================
 def build(wilayah):
 
-    beras = get_series(
-        "dataset/beras.xlsx",
-        wilayah,
-        "Beras"
-    )
+    beras = get_series("dataset/beras.xlsx", wilayah, "Beras")
+    minyak = get_series("dataset/minyak.xlsx", wilayah, "Minyak Goreng")
 
-    minyak = get_series(
-        "dataset/minyak.xlsx",
-        wilayah,
-        "Minyak Goreng"
+    X = np.arange(1, len(beras) + 1).reshape(-1, 1)
 
-    )
+    model_beras = LinearRegression().fit(X, beras)
+    model_minyak = LinearRegression().fit(X, minyak)
 
-    X = np.arange(1, len(beras)+1).reshape(-1,1)
-
-    mb = LinearRegression().fit(X, beras)
-    mm = LinearRegression().fit(X, minyak)
-
-    pb = mb.predict(X)
-    pm = mm.predict(X)
+    pred_beras_train = model_beras.predict(X)
+    pred_minyak_train = model_minyak.predict(X)
 
     metrics = {
-        "mae_b": round(mean_absolute_error(beras,pb),2),
-        "mse_b": round(mean_squared_error(beras,pb),2),
-        "rmse_b": round(math.sqrt(mean_squared_error(beras,pb)),2),
-        "r2_b": round(r2_score(beras,pb),4),
+        "mae_beras": round(mean_absolute_error(beras, pred_beras_train), 2),
+        "mse_beras": round(mean_squared_error(beras, pred_beras_train), 2),
+        "rmse_beras": round(math.sqrt(mean_squared_error(beras, pred_beras_train)), 2),
+        "r2_beras": round(r2_score(beras, pred_beras_train), 4),
 
-        "mae_m": round(mean_absolute_error(minyak,pm),2),
-        "mse_m": round(mean_squared_error(minyak,pm),2),
-        "rmse_m": round(math.sqrt(mean_squared_error(minyak,pm)),2),
-        "r2_m": round(r2_score(minyak,pm),4),
+        "mae_minyak": round(mean_absolute_error(minyak, pred_minyak_train), 2),
+        "mse_minyak": round(mean_squared_error(minyak, pred_minyak_train), 2),
+        "rmse_minyak": round(math.sqrt(mean_squared_error(minyak, pred_minyak_train)), 2),
+        "r2_minyak": round(r2_score(minyak, pred_minyak_train), 4),
     }
 
-    return mb, mm, metrics, beras, minyak
+    return model_beras, model_minyak, metrics
 
-@app.route("/", methods=["GET", "POST"])
-def index():
-    pred_b = None
-    pred_m = None
-    bulan_hasil = None
-    tahun_hasil = None
 
-    tahun = 2026
-    bulan = 1
+# =========================
+# STREAMLIT UI
+# =========================
+st.set_page_config(page_title="PriceWise Jabar", layout="centered")
 
-    wilayah = "Kota Bandung"
+st.title("📊 Prediksi Harga Beras & Minyak Goreng Jabar")
+st.write("Aplikasi prediksi menggunakan Linear Regression")
 
-    if request.method == "POST":
-        wilayah = request.form["wilayah"]
-    mb, mm, metrics, beras, minyak = build(wilayah)
+# input user
+wilayah = st.selectbox("Pilih Wilayah", ["Kota Bandung"])
 
-    if request.method == "POST":
+tahun = st.number_input("Tahun", min_value=2024, max_value=2035, value=2026)
+bulan = st.number_input("Bulan", min_value=1, max_value=12, value=1)
 
-        tahun = int(request.form["tahun"])
-        bulan = int(request.form["bulan"])
+# build model
+model_beras, model_minyak, metrics = build(wilayah)
 
-        print("TAHUN =", tahun)
-        print("BULAN =", bulan)
+# tombol prediksi
+if st.button("🔮 Prediksi"):
 
-        periode = (tahun - 2024) * 12 + bulan
+    periode = (tahun - 2024) * 12 + bulan
 
-        pred_b = round(
-            mb.predict([[periode]])[0],
-            2
-        )
+    pred_b = round(model_beras.predict([[periode]])[0], 2)
+    pred_m = round(model_minyak.predict([[periode]])[0], 2)
 
-        pred_m = round(
-            mm.predict([[periode]])[0],
-            2
-        )
+    st.success(f"🍚 Prediksi Harga Beras: {pred_b}")
+    st.success(f"🛢️ Prediksi Harga Minyak Goreng: {pred_m}")
 
-        nama_bulan = [
-            "Januari", "Februari", "Maret", "April",
-            "Mei", "Juni", "Juli", "Agustus",
-            "September", "Oktober", "November", "Desember"
-        ]
-
-        bulan_hasil = nama_bulan[bulan - 1]
-        tahun_hasil = tahun
-
-    return render_template(
-    "index.html",
-    metrics=metrics,
-    pred_b=pred_b,
-    pred_m=pred_m,
-    bulan_hasil=bulan_hasil,
-    tahun_hasil=tahun_hasil,
-    wilayah=wilayah,
-    tahun=tahun,
-    bulan=bulan,
-    data_beras=beras,
-    data_minyak=minyak
-)
-
-if __name__=="__main__":
-    app.run(debug=True)
+    st.write("### 📊 Metrics Model")
+    st.json(metrics)
