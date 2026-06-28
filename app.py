@@ -21,19 +21,28 @@ def get_series(file_name, city, keyword):
 
     df = pd.read_excel(file_name, sheet_name=city)
 
-    # filter baris sesuai komoditas (beras / minyak)
+    # filter baris sesuai komoditas
     rows = df[df.iloc[:, 1].astype(str).str.contains(keyword, case=False, na=False)]
 
     if rows.empty:
         return []
 
-    # ambil semua baris lalu rata-rata
+    # ambil kolom harga (dari kolom ke-3 dst)
     data = rows.iloc[:, 2:]
 
-    # ubah format "19,600" → 19600
-    data = data.replace("-", 0)
-    data = data.applymap(lambda x: float(str(x).replace(",", "")) if str(x) not in ["nan", ""] else 0)
+    # =========================
+    # FIX UTAMA (GANTI APPLYMAP)
+    # =========================
 
+    data = data.replace("-", np.nan)
+    data = data.replace(",", "", regex=True)
+
+    data = data.apply(pd.to_numeric, errors="coerce")
+
+    # isi missing value
+    data = data.fillna(0)
+
+    # rata-rata tiap kolom lalu jadi list
     return data.mean().tolist()
 
 
@@ -78,11 +87,9 @@ st.set_page_config(page_title="PriceWise Jabar", layout="centered")
 
 st.title("📊 PriceWise - Prediksi Harga Beras & Minyak Goreng Jabar")
 
-# kota dari sheet
 cities = get_city_list()
 city = st.selectbox("Pilih Kota", cities)
 
-# komoditas fix (biar simpel & stabil)
 komoditas = st.selectbox("Komoditas", ["Beras", "Minyak"])
 
 tahun = st.number_input("Tahun", 2024, 2035, 2026)
